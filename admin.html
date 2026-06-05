@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="uk" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Адмін панель - ЄФВВ Економіка</title>
+  
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.10.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="min-h-screen bg-base-200 text-base-content flex flex-col">
+  
+  <div class="navbar bg-base-100 shadow-sm px-4 lg:px-8">
+    <div class="flex-1">
+      <a href="index.html" class="btn btn-ghost gap-2">
+        <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        <span>Назад до тесту</span>
+      </a>
+    </div>
+    <div class="flex-none gap-2 font-bold text-xl">
+      Адмін панель
+    </div>
+  </div>
+
+  <main class="flex-1 max-w-5xl w-full mx-auto p-4 flex flex-col gap-6 py-8">
+    
+    <div class="alert shadow-sm bg-base-100 border border-base-300">
+      <i data-lucide="info" class="text-info"></i>
+      <div>
+        <h3 class="font-bold">Як додати нові питання</h3>
+        <div class="text-sm">1. Скопіюйте промпт нижче та відправте його в ChatGPT/Claude разом із сирим текстом питань.<br>2. Скопіюйте згенерований JSON та вставте його в поле нижче.<br>3. Натисніть "Оновити базу", щоб згенерувати новий файл <code>questions.json</code> і завантажити його.</div>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="card-body">
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="card-title text-lg">Промпт для ШІ</h2>
+          <button id="btn-copy-prompt" class="btn btn-sm btn-outline btn-primary">
+            <i data-lucide="copy" class="w-4 h-4"></i> Копіювати
+          </button>
+        </div>
+        <textarea id="ai-prompt" class="textarea textarea-bordered w-full h-40 font-mono text-sm resize-none" readonly>Перетвори наведені нижче тестові питання на масив JSON об'єктів. Кожен об'єкт повинен мати таку структуру:
+{
+  "question": "Текст питання",
+  "imageUrl": "images/назва.png", // ДОДАВАЙ ТІЛЬКИ ЯКЩО в питанні згадується зображення (назву файлу генеруй з контексту)
+  "options": [
+    { "id": "a", "text": "Варіант А", "imageUrl": "images/opt_a.png" }, // imageUrl тільки якщо у варіанті є картинка
+    { "id": "b", "text": "Варіант Б" },
+    { "id": "c", "text": "Варіант В" },
+    { "id": "d", "text": "Варіант Г" }
+  ],
+  "correctOptionId": "b"
+}
+Генерувати поле "id" для самого питання НЕ потрібно. Поверни ТІЛЬКИ валідний JSON масив.</textarea>
+      </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-sm border border-base-300">
+      <div class="card-body flex flex-col gap-4">
+        <h2 class="card-title text-lg flex justify-between">
+          <span>Вставка нових питань (JSON)</span>
+          <span class="badge badge-neutral" id="db-status">Поточна база: завантаження...</span>
+        </h2>
+        
+        <textarea id="json-input" class="textarea textarea-bordered w-full h-64 font-mono text-sm placeholder:opacity-50" placeholder="Вставте згенерований JSON масив сюди...
+[
+  {
+    &quot;question&quot;: &quot;...&quot;,
+    &quot;options&quot;: [...]
+  }
+]"></textarea>
+
+        <div id="error-msg" class="text-error text-sm hidden font-medium"></div>
+        <div id="success-msg" class="text-success text-sm hidden font-medium"></div>
+
+        <div class="flex justify-end gap-3 mt-2">
+          <button id="btn-process" class="btn btn-primary" disabled>
+            <i data-lucide="database" class="w-4 h-4 mr-1"></i> Згенерувати оновлений файл
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script src="admin.js"></script>
+  <script>
+    lucide.createIcons();
+    
+    // Initial theme check
+    const savedTheme = localStorage.getItem('efvv_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  </script>
+</body>
+</html>

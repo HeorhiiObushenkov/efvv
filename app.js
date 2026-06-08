@@ -11,6 +11,23 @@ let selectedTestSize = 140;
 const STORAGE_KEY = 'efvv_state';
 let confirmCallback = null;
 
+// Офіційні таблиці переведення балів
+const SCORING_TABLES = {
+  140: {
+    35: 100, 36: 101, 37: 102, 38: 103, 39: 104, 40: 105, 41: 106, 42: 107, 43: 108, 44: 109, 45: 110,
+    46: 111, 47: 112, 48: 113.5, 49: 115, 50: 116.5, 51: 118, 52: 119.5, 53: 121, 54: 122.5, 55: 124,
+    56: 125.5, 57: 127, 58: 128.5, 59: 130, 60: 131.5, 61: 133, 62: 134.5, 63: 136, 64: 137.5, 65: 139,
+    66: 140.5, 67: 142, 68: 143.5, 69: 145, 70: 146.5, 71: 148, 72: 149, 73: 150, 74: 151, 75: 152,
+    76: 153, 77: 154, 78: 155, 79: 156, 80: 157, 81: 158, 82: 159, 83: 160, 84: 161, 85: 162, 86: 163,
+    87: 164, 88: 165, 89: 166, 90: 167, 91: 168, 92: 169, 93: 170, 94: 171, 95: 172, 96: 173, 97: 174,
+    98: 175, 99: 176, 100: 177, 101: 178, 102: 179, 103: 180, 104: 181, 105: 182, 106: 183, 107: 183.5,
+    108: 184, 109: 184.5, 110: 185, 111: 185.5, 112: 186, 113: 186.5, 114: 187, 115: 187.5, 116: 188,
+    117: 188.5, 118: 189, 119: 189.5, 120: 190, 121: 190.5, 122: 191, 123: 191.5, 124: 192, 125: 192.5,
+    126: 193, 127: 193.5, 128: 194, 129: 194.5, 130: 195, 131: 195.5, 132: 196, 133: 196.5, 134: 197,
+    135: 197.5, 136: 198, 137: 198.5, 138: 199, 139: 199.5, 140: 200
+  }
+};
+
 // DOM Елементи
 const els = {
   themeToggle: document.getElementById('theme-toggle'),
@@ -467,8 +484,54 @@ function calculateResults(saveToHistoryFlag = false) {
   els.resultRaw.textContent = `${correctCount} / ${state.questions.length}`;
   
   const maxQ = state.questions.length || 1;
-  const scaledScore = 100 + (correctCount / maxQ) * 100;
-  els.resultScaled.textContent = scaledScore.toFixed(1);
+  let finalScore = "Не склав";
+  let displayScore = "Не склав";
+  let isFailed = false;
+
+  if (maxQ === 140) {
+    if (correctCount >= 35) {
+      finalScore = SCORING_TABLES[140][correctCount] || 200;
+      displayScore = finalScore.toFixed ? finalScore.toFixed(1).replace('.0', '') : finalScore;
+    } else {
+      isFailed = true;
+    }
+  } else if (maxQ === 60) {
+    const threshold = 15;
+    if (correctCount >= threshold) {
+      finalScore = 100 + ((correctCount - threshold) / (60 - threshold)) * 100;
+      displayScore = finalScore.toFixed(1).replace('.0', '');
+    } else {
+      isFailed = true;
+    }
+  } else if (maxQ === 30) {
+    const threshold = 8;
+    if (correctCount >= threshold) {
+      finalScore = 100 + ((correctCount - threshold) / (30 - threshold)) * 100;
+      displayScore = finalScore.toFixed(1).replace('.0', '');
+    } else {
+      isFailed = true;
+    }
+  } else {
+    // Fallback logic
+    const threshold = Math.round(maxQ * 0.25);
+    if (correctCount >= threshold) {
+      finalScore = 100 + ((correctCount - threshold) / (maxQ - threshold)) * 100;
+      displayScore = finalScore.toFixed(1).replace('.0', '');
+    } else {
+      isFailed = true;
+    }
+  }
+
+  els.resultScaled.textContent = displayScore;
+  
+  // Update visual styles if failed
+  if (isFailed) {
+    els.resultScaled.classList.remove('text-secondary', 'text-success');
+    els.resultScaled.classList.add('text-error');
+  } else {
+    els.resultScaled.classList.remove('text-error');
+    els.resultScaled.classList.add('text-secondary');
+  }
 
   if (saveToHistoryFlag) {
      const history = JSON.parse(localStorage.getItem('efvv_history') || '[]');
@@ -476,7 +539,7 @@ function calculateResults(saveToHistoryFlag = false) {
         date: new Date().toISOString(),
         total: state.questions.length,
         correct: correctCount,
-        scaled: scaledScore.toFixed(1)
+        scaled: displayScore
      });
      if (history.length > 15) history.pop(); // Keep last 15
      localStorage.setItem('efvv_history', JSON.stringify(history));

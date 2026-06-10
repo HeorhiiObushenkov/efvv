@@ -356,9 +356,9 @@ function renderQuestion() {
           const isCorrect = normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId);
           
           if (isCorrect) {
-              input.classList.add('input-success', 'text-success-content', 'bg-success/10');
+              input.classList.add('input-success', 'text-base-content', 'bg-success/10');
           } else {
-              input.classList.add('input-error', 'text-error-content', 'bg-error/10');
+              input.classList.add('input-error', 'text-base-content', 'bg-error/10');
               const correctInfo = document.createElement('div');
               correctInfo.className = 'text-sm text-success font-medium flex items-center gap-1';
               correctInfo.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> Правильна відповідь: ${q.correctAnswer || q.correctOptionId}`;
@@ -398,13 +398,13 @@ function renderQuestion() {
     
     if (showResult) {
       if (isCorrect && isSelected) {
-        labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-success/20 border-success text-success-content font-medium`;
+        labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-success/20 border-success text-base-content font-medium`;
         iconHtml = '<i data-lucide="check-circle-2" class="w-5 h-5 text-success mt-0.5"></i>';
       } else if (isCorrect && !isSelected) {
-        labelClass = `p-4 border rounded-xl flex gap-3 items-start border-success text-success-content font-medium`;
+        labelClass = `p-4 border rounded-xl flex gap-3 items-start border-success text-base-content font-medium`;
         iconHtml = '<i data-lucide="info" class="w-5 h-5 text-success mt-0.5"></i>';
       } else if (!isCorrect && isSelected) {
-        labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-error/20 border-error text-error-content font-medium`;
+        labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-error/20 border-error text-base-content font-medium`;
         iconHtml = '<i data-lucide="x-circle" class="w-5 h-5 text-error mt-0.5"></i>';
       } else {
         labelClass = `p-4 border rounded-xl flex gap-3 items-start border-base-300 opacity-60`;

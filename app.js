@@ -190,8 +190,39 @@ async function fetchQuestions() {
     
     const data = await response.json();
     
-    const shuffled = data.sort(() => 0.5 - Math.random());
-    state.questions = shuffled.slice(0, selectedTestSize);
+    // Завантажуємо історію показів питань
+    const weights = JSON.parse(localStorage.getItem('efvv_question_weights') || '{}');
+    
+    // Оцінюємо кожне питання: випадкове число ділиться на (кількість показів + 1)
+    // Чим частіше питання траплялось, тим менший його максимальний бал
+    const scoredQuestions = data.map(q => {
+        const seenCount = weights[q.id] || 0;
+        const score = Math.random() / (seenCount + 1);
+        return { q, score };
+    });
+    
+    // Сортуємо за спаданням балу (найбільший бал - найвищий пріоритет)
+    scoredQuestions.sort((a, b) => b.score - a.score);
+    
+    // Відбираємо питання
+    state.questions = scoredQuestions.slice(0, selectedTestSize).map(item => item.q);
+    
+    // Оновлюємо статистику показів для відібраних питань
+    state.questions.forEach(q => {
+        weights[q.id] = (weights[q.id] || 0) + 1;
+    });
+    localStorage.setItem('efvv_question_weights', JSON.stringify(weights));
+    
+    // Перемішуємо варіанти відповідей для кожного питання (Fisher-Yates)
+    state.questions.forEach(q => {
+      if (q.options && Array.isArray(q.options)) {
+         for (let i = q.options.length - 1; i > 0; i--) {
+             const j = Math.floor(Math.random() * (i + 1));
+             [q.options[i], q.options[j]] = [q.options[j], q.options[i]];
+         }
+      }
+    });
+
     state.answers = {};
     state.currentIndex = 0;
     state.isFinished = false;
@@ -271,6 +302,16 @@ function goToQuestion(index) {
   updateControls();
 }
 
+// Нормалізація відповіді (числа з комою або крапкою, регістр)
+function normalizeAnswer(val) {
+    if (!val && val !== 0) return "";
+    let str = String(val).trim();
+    if (/^-?\d+([.,]\d+)?$/.test(str)) {
+        return parseFloat(str.replace(',', '.')).toString();
+    }
+    return str.toLowerCase();
+}
+
 // Відображення поточного питання
 function renderQuestion() {
   const q = state.questions[state.currentIndex];
@@ -294,9 +335,57 @@ function renderQuestion() {
   
   els.optionsContainer.innerHTML = '';
   
+  if (q.type === 'input' || !q.options || q.options.length === 0) {
+      const inputWrapper = document.createElement('div');
+      inputWrapper.className = 'mt-4 flex flex-col gap-2';
+      
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'input input-bordered w-full max-w-sm';
+      input.placeholder = 'Введіть вашу відповідь...';
+      input.value = state.answers[q.id] || '';
+      
+      if (isReviewMode) {
+          input.disabled = true;
+          const isCorrect = normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId);
+          
+          if (isCorrect) {
+              input.classList.add('input-success', 'text-success-content', 'bg-success/10');
+          } else {
+              input.classList.add('input-error', 'text-error-content', 'bg-error/10');
+              const correctInfo = document.createElement('div');
+              correctInfo.className = 'text-sm text-success font-medium flex items-center gap-1';
+              correctInfo.innerHTML = `<i data-lucide="check-circle-2" class="w-4 h-4"></i> Правильна відповідь: ${q.correctAnswer || q.correctOptionId}`;
+              inputWrapper.appendChild(correctInfo);
+          }
+      } else {
+          input.addEventListener('input', (e) => {
+              state.answers[q.id] = e.target.value;
+              saveState();
+              updateNavGrid();
+          });
+      }
+      
+      inputWrapper.insertBefore(input, inputWrapper.firstChild);
+      els.optionsContainer.appendChild(inputWrapper);
+      
+      if (isReviewMode) lucide.createIcons();
+      return;
+  }
+
+  const isMulti = Array.isArray(q.correctOptionId);
+
   q.options.forEach(opt => {
-    const isSelected = state.answers[q.id] === opt.id;
-    const isCorrect = opt.id === q.correctOptionId;
+    let isSelected;
+    let isCorrect;
+
+    if (isMulti) {
+      isSelected = Array.isArray(state.answers[q.id]) && state.answers[q.id].includes(opt.id);
+      isCorrect = q.correctOptionId.includes(opt.id);
+    } else {
+      isSelected = state.answers[q.id] === opt.id;
+      isCorrect = opt.id === q.correctOptionId;
+    }
     
     let labelClass = `p-4 border rounded-xl transition-all flex gap-3 items-start border-base-300`;
     let iconHtml = '';
@@ -325,10 +414,10 @@ function renderQuestion() {
         label.appendChild(iconDiv);
     } else {
         const input = document.createElement('input');
-        input.type = 'radio';
+        input.type = isMulti ? 'checkbox' : 'radio';
         input.name = `question-${q.id}`;
         input.value = opt.id;
-        input.className = 'radio radio-primary mt-0.5';
+        input.className = `${isMulti ? 'checkbox checkbox-primary' : 'radio radio-primary'} mt-0.5`;
         input.checked = isSelected;
         input.addEventListener('change', () => selectOption(q.id, opt.id));
         label.appendChild(input);
@@ -361,7 +450,27 @@ function renderQuestion() {
 // Вибір варіанту відповіді
 function selectOption(qId, optId) {
   if(isReviewMode) return;
-  state.answers[qId] = optId;
+  
+  const q = state.questions.find(quest => quest.id === qId);
+  const isMulti = Array.isArray(q.correctOptionId);
+
+  if (isMulti) {
+    if (!state.answers[qId] || !Array.isArray(state.answers[qId])) {
+      state.answers[qId] = [];
+    }
+    const idx = state.answers[qId].indexOf(optId);
+    if (idx > -1) {
+      state.answers[qId].splice(idx, 1);
+    } else {
+      state.answers[qId].push(optId);
+    }
+    if (state.answers[qId].length === 0) {
+      delete state.answers[qId];
+    }
+  } else {
+    state.answers[qId] = optId;
+  }
+  
   saveState();
   
   renderQuestion();
@@ -411,7 +520,16 @@ function updateNavGrid() {
     const btn = els.navGridContainer.querySelector(`.nav-btn-${i}`);
     if (!btn) return;
     
-    const isAnswered = !!state.answers[q.id];
+    const isMulti = Array.isArray(q.correctOptionId);
+    let isAnswered;
+    if (q.type === 'input' || !q.options) {
+        isAnswered = !!state.answers[q.id] && String(state.answers[q.id]).trim().length > 0;
+    } else if (isMulti) {
+        isAnswered = state.answers[q.id] && state.answers[q.id].length > 0;
+    } else {
+        isAnswered = !!state.answers[q.id];
+    }
+
     const isCurrent = i === state.currentIndex;
     
     if (isAnswered) answeredCount++;
@@ -420,7 +538,16 @@ function updateNavGrid() {
     btn.className = `btn btn-sm btn-circle text-xs nav-btn-${i}`;
     
     if (isReviewMode) {
-       const isCorrect = state.answers[q.id] === q.correctOptionId;
+       let isCorrect;
+       if (q.type === 'input' || !q.options) {
+           isCorrect = normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId);
+       } else if (isMulti) {
+           const ans = state.answers[q.id] || [];
+           isCorrect = ans.length === q.correctOptionId.length && q.correctOptionId.every(id => ans.includes(id));
+       } else {
+           isCorrect = state.answers[q.id] === q.correctOptionId;
+       }
+
        if (isCorrect) {
           btn.classList.add('btn-success', 'text-success-content');
        } else if (isAnswered) {
@@ -476,8 +603,22 @@ function calculateResults(saveToHistoryFlag = false) {
   let correctCount = 0;
   
   state.questions.forEach(q => {
-    if (state.answers[q.id] === q.correctOptionId) {
-      correctCount++;
+    if (q.type === 'input' || !q.options) {
+        if (normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId)) {
+            correctCount++;
+        }
+    } else {
+        const isMulti = Array.isArray(q.correctOptionId);
+        if (isMulti) {
+            const ans = state.answers[q.id] || [];
+            if (ans.length === q.correctOptionId.length && q.correctOptionId.every(id => ans.includes(id))) {
+                correctCount++;
+            }
+        } else {
+            if (state.answers[q.id] === q.correctOptionId) {
+              correctCount++;
+            }
+        }
     }
   });
   

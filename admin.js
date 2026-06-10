@@ -77,13 +77,35 @@ els.btnProcess.addEventListener('click', () => {
       return;
     }
     
-    // Перевірка базової структури хоча б першого елемента
-    if (newQuestions.length > 0) {
-      const first = newQuestions[0];
-      if (!first.question || !first.options || !Array.isArray(first.options)) {
-        showError("Неправильна структура об'єктів. Перевірте поля question, options.");
+    // Детальна перевірка структури кожного питання
+    let errorMsgStr = null;
+    for (let i = 0; i < newQuestions.length; i++) {
+        const q = newQuestions[i];
+        if (!q.question) {
+            errorMsgStr = `Помилка: Питання #${i + 1} не має тексту в полі "question".`;
+            break;
+        }
+        
+        if (q.type === 'input') {
+            if (q.correctAnswer === undefined && q.correctOptionId === undefined) {
+                errorMsgStr = `Помилка: Задача #${i + 1} ("${q.question.substring(0, 30)}...") не має правильної відповіді (поле "correctAnswer").`;
+                break;
+            }
+        } else {
+            if (!q.options || !Array.isArray(q.options) || q.options.length < 2) {
+                errorMsgStr = `Помилка: Питання #${i + 1} ("${q.question.substring(0, 30)}...") не має масиву "options" (варіанти відповідей) або їх менше двох. Якщо це задача, додайте "type": "input".`;
+                break;
+            }
+            if (!q.correctOptionId) {
+                errorMsgStr = `Помилка: Питання #${i + 1} ("${q.question.substring(0, 30)}...") не має правильної відповіді (поле "correctOptionId").`;
+                break;
+            }
+        }
+    }
+
+    if (errorMsgStr) {
+        showError(errorMsgStr);
         return;
-      }
     }
     
     // Присвоєння ID та об'єднання
@@ -94,10 +116,18 @@ els.btnProcess.addEventListener('click', () => {
       localMaxId++;
       const newQ = {
         id: `q-${String(localMaxId).padStart(3, '0')}`,
-        question: q.question,
-        options: q.options,
-        correctOptionId: q.correctOptionId
+        question: q.question
       };
+      
+      if (q.type === 'input') {
+          newQ.type = 'input';
+          if (q.correctAnswer !== undefined) newQ.correctAnswer = q.correctAnswer;
+          if (q.correctOptionId !== undefined) newQ.correctOptionId = q.correctOptionId; // підтримка старих форматів
+      } else {
+          newQ.options = q.options;
+          newQ.correctOptionId = q.correctOptionId;
+      }
+      
       if (q.imageUrl) newQ.imageUrl = q.imageUrl;
       return newQ;
     });

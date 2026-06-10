@@ -2,6 +2,7 @@
 let state = {
   questions: [],
   answers: {}, // { "q-001": "b", "q-002": "a" }
+  checkedQuestions: {}, // { "q-001": true }
   currentIndex: 0,
   isFinished: false
 };
@@ -50,6 +51,7 @@ const els = {
   btnPrev: document.getElementById('btn-prev'),
   btnNext: document.getElementById('btn-next'),
   btnReset: document.getElementById('btn-reset'),
+  btnCheckAnswer: document.getElementById('btn-check-answer'),
   btnFinish: document.getElementById('btn-finish'),
   btnFinishSidebar: document.getElementById('btn-finish-sidebar'),
   btnBackResults: document.getElementById('btn-back-results'),
@@ -114,6 +116,7 @@ async function init() {
   els.btnResetSaved.addEventListener('click', resetSavedProgress);
   els.btnPrev.addEventListener('click', () => goToQuestion(state.currentIndex - 1));
   els.btnNext.addEventListener('click', () => goToQuestion(state.currentIndex + 1));
+  if (els.btnCheckAnswer) els.btnCheckAnswer.addEventListener('click', checkCurrentAnswer);
   els.btnReset.addEventListener('click', confirmReset);
   els.btnFinish.addEventListener('click', finishTest);
   els.btnFinishSidebar.addEventListener('click', finishTest);
@@ -224,6 +227,7 @@ async function fetchQuestions() {
     });
 
     state.answers = {};
+    state.checkedQuestions = {};
     state.currentIndex = 0;
     state.isFinished = false;
     
@@ -267,7 +271,7 @@ function showConfirm(title, message, onConfirm) {
 function resetSavedProgress() {
   showConfirm('Скинути прогрес?', 'Ви впевнені, що хочете скинути прогрес і повернутися на головну?', () => {
     localStorage.removeItem(STORAGE_KEY);
-    state = { questions: [], answers: {}, currentIndex: 0, isFinished: false };
+    state = { questions: [], answers: {}, checkedQuestions: {}, currentIndex: 0, isFinished: false };
     isReviewMode = false;
     
     els.continueInfo.classList.add('hidden');
@@ -315,6 +319,8 @@ function normalizeAnswer(val) {
 // Відображення поточного питання
 function renderQuestion() {
   const q = state.questions[state.currentIndex];
+  const isChecked = state.checkedQuestions && state.checkedQuestions[q.id];
+  const showResult = isReviewMode || isChecked;
   
   els.questionCounter.textContent = `${state.currentIndex + 1} / ${state.questions.length}`;
   els.questionText.textContent = q.question;
@@ -345,7 +351,7 @@ function renderQuestion() {
       input.placeholder = 'Введіть вашу відповідь...';
       input.value = state.answers[q.id] || '';
       
-      if (isReviewMode) {
+      if (showResult) {
           input.disabled = true;
           const isCorrect = normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId);
           
@@ -369,7 +375,7 @@ function renderQuestion() {
       inputWrapper.insertBefore(input, inputWrapper.firstChild);
       els.optionsContainer.appendChild(inputWrapper);
       
-      if (isReviewMode) lucide.createIcons();
+      if (showResult) lucide.createIcons();
       return;
   }
 
@@ -390,11 +396,14 @@ function renderQuestion() {
     let labelClass = `p-4 border rounded-xl transition-all flex gap-3 items-start border-base-300`;
     let iconHtml = '';
     
-    if (isReviewMode) {
-      if (isCorrect) {
+    if (showResult) {
+      if (isCorrect && isSelected) {
         labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-success/20 border-success text-success-content font-medium`;
         iconHtml = '<i data-lucide="check-circle-2" class="w-5 h-5 text-success mt-0.5"></i>';
-      } else if (isSelected) {
+      } else if (isCorrect && !isSelected) {
+        labelClass = `p-4 border rounded-xl flex gap-3 items-start border-success text-success-content font-medium`;
+        iconHtml = '<i data-lucide="info" class="w-5 h-5 text-success mt-0.5"></i>';
+      } else if (!isCorrect && isSelected) {
         labelClass = `p-4 border rounded-xl flex gap-3 items-start bg-error/20 border-error text-error-content font-medium`;
         iconHtml = '<i data-lucide="x-circle" class="w-5 h-5 text-error mt-0.5"></i>';
       } else {
@@ -408,7 +417,7 @@ function renderQuestion() {
     const label = document.createElement('label');
     label.className = labelClass;
     
-    if (isReviewMode) {
+    if (showResult) {
         const iconDiv = document.createElement('div');
         iconDiv.innerHTML = iconHtml;
         label.appendChild(iconDiv);
@@ -442,7 +451,7 @@ function renderQuestion() {
     els.optionsContainer.appendChild(label);
   });
   
-  if (isReviewMode) {
+  if (showResult) {
       lucide.createIcons();
   }
 }
@@ -450,6 +459,7 @@ function renderQuestion() {
 // Вибір варіанту відповіді
 function selectOption(qId, optId) {
   if(isReviewMode) return;
+  if(state.checkedQuestions && state.checkedQuestions[qId]) return;
   
   const q = state.questions.find(quest => quest.id === qId);
   const isMulti = Array.isArray(q.correctOptionId);
@@ -481,6 +491,17 @@ function selectOption(qId, optId) {
 function updateControls() {
   els.btnPrev.disabled = state.currentIndex === 0;
   
+  const q = state.questions[state.currentIndex];
+  const isChecked = state.checkedQuestions && state.checkedQuestions[q.id];
+  
+  if (els.btnCheckAnswer) {
+      if (isReviewMode || isChecked) {
+          els.btnCheckAnswer.classList.add('hidden');
+      } else {
+          els.btnCheckAnswer.classList.remove('hidden');
+      }
+  }
+
   if (state.currentIndex === state.questions.length - 1) {
     els.btnNext.classList.add('hidden');
     if (!isReviewMode) els.btnFinish.classList.remove('hidden');
@@ -495,6 +516,20 @@ function updateControls() {
   } else {
     els.btnBackResults.classList.add('hidden');
   }
+}
+
+// Перевірка поточної відповіді під час тесту
+function checkCurrentAnswer() {
+  if (isReviewMode) return;
+  const q = state.questions[state.currentIndex];
+  
+  if (!state.checkedQuestions) state.checkedQuestions = {};
+  state.checkedQuestions[q.id] = true;
+  saveState();
+  
+  renderQuestion();
+  updateNavGrid();
+  updateControls();
 }
 
 // Рендер навігаційної сітки
@@ -537,19 +572,29 @@ function updateNavGrid() {
     // Reset classes
     btn.className = `btn btn-sm btn-circle text-xs nav-btn-${i}`;
     
-    if (isReviewMode) {
-       let isCorrect;
+    const isChecked = state.checkedQuestions && state.checkedQuestions[q.id];
+    const showResult = isReviewMode || isChecked;
+    
+    if (showResult) {
+       let isCorrect = false;
+       let isPartiallyCorrect = false;
+       
        if (q.type === 'input' || !q.options) {
            isCorrect = normalizeAnswer(state.answers[q.id]) === normalizeAnswer(q.correctAnswer || q.correctOptionId);
        } else if (isMulti) {
            const ans = state.answers[q.id] || [];
            isCorrect = ans.length === q.correctOptionId.length && q.correctOptionId.every(id => ans.includes(id));
+           if (!isCorrect && ans.length > 0) {
+               isPartiallyCorrect = ans.some(id => q.correctOptionId.includes(id));
+           }
        } else {
            isCorrect = state.answers[q.id] === q.correctOptionId;
        }
 
        if (isCorrect) {
           btn.classList.add('btn-success', 'text-success-content');
+       } else if (isPartiallyCorrect) {
+          btn.classList.add('btn-warning', 'text-warning-content');
        } else if (isAnswered) {
           btn.classList.add('btn-error', 'text-error-content');
        } else {
